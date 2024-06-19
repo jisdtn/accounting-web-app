@@ -4,4 +4,9 @@ run:
 
 .PHONY: build
 build:
-	docker-compose -f docker-compose.yml up -d --build
+	test -f .env || cp .env.example .env ; docker-compose -f docker-compose.yml up -d --build
+
+
+.PHONY: down
+down:
+	docker-compose down --remove-orphans

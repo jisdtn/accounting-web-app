@@ -6,6 +6,7 @@ volumes:
 services:
   db:
     image: postgres:13.10
+    environment: [POSTGRES_HOST_AUTH_METHOD=trust]
     env_file: .env
     volumes:
       - pg_data:/var/lib/postgresql/data
@@ -26,5 +27,5 @@ services:
     build: ./frontend/
     env_file: .env
     ports:
-      - 7000:7000
+      - 7070:7070
     restart: on-failure

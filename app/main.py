@@ -1,21 +1,25 @@
-# from postgresql_app import models
-# from postgresql_app.database import SessionLocal, engine
 from typing import Union
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+import asyncpg
+
 
 app = FastAPI()
 
-# models.Base.metadata.create_all(bind=engine)
 
+async def get_db_connection():
+    return await asyncpg.connect(user='postgres', password='postgres', database='postgres', host='127.0.0.1')
+@app.get("/items/{item_id}")
+async def read_item(item_id: int):
+    conn = await get_db_connection()
+    try:
+        row = await conn.fetchrow('SELECT * FROM items WHERE id = $1', item_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Item not found")
+        return dict(row)
+    finally:
+        await conn.close()
 
-# Dependency
-# def get_db():
-#     db = SessionLocal()
-#     try:
-#         yield db
-#     finally:
-#         db.close()
 
 class ReadRootRequest(BaseModel):
     name: str

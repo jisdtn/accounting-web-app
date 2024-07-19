@@ -6,6 +6,7 @@ create table categories (
 );
 
 create table balance (
+    id serial primary key,
     cat_id int REFERENCES categories (id),
     date timestamp with time zone default current_timestamp,
     value int,

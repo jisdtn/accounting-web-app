@@ -86,6 +86,72 @@ async def read_balance(from_date: date = Query(...), to_date: date = Query(...))
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+@app.on_event("shutdown")
+async def shutdown():
+    await pool.close()
+
+@app.get("/categories/")
+async def read_categories():
+    async with pool.acquire() as connection:
+        try:
+            categories = await connection.fetch("SELECT * FROM Categories")
+            return categories
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/categories/")
+async def create_category(request: Request):
+    data = await request.json()
+    name = data.get('name')
+    currency = data.get('currency')
+
+    if name is None or currency is None:
+        raise HTTPException(status_code=400, detail="Missing parameters")
+
+    async with pool.acquire() as connection:
+        try:
+            query = "INSERT INTO Categories (name, currency) VALUES ($1, $2) RETURNING id"
+            category_id = await connection.fetchval(query, name, currency)
+            return {"id": category_id, "name": name, "currency": currency}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/balances/")
+async def read_balance(from_date: date = Query(...), to_date: date = Query(...)):
+    async with pool.acquire() as connection:
+        try:
+            query = """
+            SELECT
+                Balance.id,
+                Balance.cat_id,
+                Categories.name AS category_name,
+                Balance.date,
+                Balance.value,
+                Balance.rate,
+                SUM(ROUND(Balance.value * Balance.rate)/1000) AS total_amount
+            FROM Balance
+            FULL OUTER JOIN Categories ON Categories.id = Balance.cat_id
+            WHERE Balance.date >= $1 AND Balance.date <= $2
+            GROUP BY Balance.id, Balance.cat_id, Categories.name, Balance.date, Balance.value, Balance.rate
+            """
+            balances = await connection.fetch(query, from_date, to_date)
+            if balances:
+                return [{
+                    "id": balance["id"],
+                    "cat_id": balance["cat_id"],
+                    "category_name": balance["category_name"],
+                    "date": balance["date"],
+                    "value": balance["value"],
+                    "rate": balance["rate"] / 1000,
+                    "converted_value": balance["total_amount"],
+                } for balance in balances]
+            else:
+                return []
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.delete("/balance/{balance_id}")
 async def delete_balance(balance_id: int):

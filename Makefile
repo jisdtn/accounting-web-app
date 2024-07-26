@@ -23,8 +23,8 @@ endif
 	cd app && dbmate new '$(name)'
 
 
-.PHONY: run-downgrade
-run-downgrade:
+.PHONY: downgrade
+downgrade:
 	cd app && dbmate -u "postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable" rollback
 
 

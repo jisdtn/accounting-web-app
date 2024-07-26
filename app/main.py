@@ -64,7 +64,7 @@ async def read_balance(from_date: date = Query(...), to_date: date = Query(...))
                 Balance.date,
                 Balance.value,
                 Balance.rate,
-                SUM(ROUND(Balance.value * Balance.rate)/1000) AS total_amount
+                ROUND(Balance.value * Balance.rate)/1000 AS amount
             FROM Balance
             FULL OUTER JOIN Categories ON Categories.id = Balance.cat_id
             WHERE Balance.date >= $1 AND Balance.date <= $2
@@ -79,7 +79,7 @@ async def read_balance(from_date: date = Query(...), to_date: date = Query(...))
                     "date": balance["date"],
                     "value": balance["value"],
                     "rate": balance["rate"] / 1000,
-                    "converted_value": balance["total_amount"],
+                    "converted_value": balance["amount"],
                 } for balance in balances]
             else:
                 return []

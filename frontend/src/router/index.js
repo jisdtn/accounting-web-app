@@ -1,23 +1,21 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import { createRouter, createWebHistory } from 'vue-router';
+import Home from '../views/Home.vue';
+import Balances from '../views/Balances.vue';
+import AddBalance from '../views/AddBalance.vue';
+import AddCategory from '../views/AddCategory.vue';
+
+const routes = [
+  { path: '/', name: 'Home', component: Home },
+  { path: '/balances', name: 'Balances', component: Balances }, // табличка с балансами и датами
+  { path: '/add-balance', name: 'AddBalance', component: AddBalance },
+  { path: '/add-category', name: 'AddCategory', component: AddCategory },
+
+];
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [
-    {
-      path: '/',
-      name: 'home',
-      component: HomeView
-    },
-    {
-      path: '/about',
-      name: 'about',
-      // route level code-splitting
-      // this generates a separate chunk (About.[hash].js) for this route
-      // which is lazy-loaded when the route is visited.
-      component: () => import('../views/AboutView.vue')
-    }
-  ]
-})
+  history: createWebHistory(import.meta.env.VITE_BASE_URL || '/'),
+  routes,
+});
 
-export default router
+export default router;  // Экспортируем router по умолчанию
+

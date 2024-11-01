@@ -78,7 +78,7 @@ async function fetchPreviousBalances() {
       previousBalances.value[balance.cat_id] = balance.value || null;
     });
   } catch (error) {
-    console.error('Ошибка при получении балансов за предыдущий день:', error.response ? error.response.data : error.message);
+    console.error('An error occurred while getting previous balances:', error.response ? error.response.data : error.message);
   }
 }
 
@@ -99,32 +99,28 @@ onMounted(() => {
 // Функция для отправки данных на бэкенд
 async function addBalances() {
   try {
-    // Преобразуем введенные данные и отправляем их на бэкенд
-    const requests = [];
-    for (const [cat_id, { value }] of Object.entries(balances.value)) {
-      if (value) {
-        console.log(`Отправляем данные: cat_id=${cat_id}, value=${value}`);
-        const request = axios.post('http://localhost:8000/balance/', {
-          cat_id: parseInt(cat_id),
-          value: parseInt(value)
-        });
-        requests.push(request);
-      }
-    }
+    // Собираем все данные для отправки в одном массиве
+    const balanceData = Object.entries(balances.value)
+      .filter(([_, { value }]) => value !== null) // Фильтруем только заполненные значения
+      .map(([cat_id, { value }]) => ({
+        cat_id: parseInt(cat_id),
+        value: parseInt(value)
+      }));
+    // Отправляем один запрос с массивом данных
+    const response = await axios.post('http://localhost:8000/balance/', balanceData);
 
-    // Ожидаем выполнения всех запросов
-    await Promise.all(requests);
-    message.value = 'Балансы успешно добавлены!';
+    message.value = 'Success!';
 
     // После успешного добавления перенаправляем на главную страницу
     setTimeout(() => {
       router.push('/');
     }, 2000); // Ожидаем 2 секунды, чтобы показать сообщение, и затем перенаправляем
   } catch (error) {
-    console.error('Ошибка при добавлении балансов:', error.response ? error.response.data : error.message);
-    message.value = `Ошибка при добавлении балансов: ${error.response ? error.response.data.detail : error.message}`;
+    console.error('An error occurred while adding balances:', error.response ? error.response.data : error.message);
+    message.value = `An error occurred while adding balances: ${error.response ? error.response.data.detail : error.message}`;
   }
 }
+
 </script>
 
 <style scoped>

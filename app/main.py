@@ -6,20 +6,19 @@ import asyncpg
 from typing import Optional
 import logging
 import httpx
-import xml.etree.ElementTree as ET
 
 
 app = FastAPI()
 
 DATABASE_URL = "postgresql://postgres:postgres@db:5432/postgres"
 
-# Конфигурация API для курса валют
-API_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
-
+API_URL = "https://api.exchangerate.host/live"
 
 # Разрешенные источники (origin)
 origins = [
     "http://localhost:7070",
+    "http://localhost:8000",
+    "https://web.telegram.org",
 ]
 
 # Настройка CORS
@@ -119,103 +118,97 @@ async def delete_balance(balance_id: int):
             raise HTTPException(status_code=400, detail=str(e))
 
 
-async def get_exchange_rate(currency: str) -> float:
+async def fetch_exchange_rates() -> dict:
     async with httpx.AsyncClient() as client:
-        response = await client.get(API_URL)
+        response = await client.get(API_URL, params={"access_key": "f7f6c2b62f3f536d814b4c1949b718ed", "source": "EUR"})
         if response.status_code != 200:
             logging.error(f"Failed to fetch exchange rates: {response.text}")
             raise HTTPException(status_code=500, detail="Unable to fetch exchange rates")
 
-        # Парсим XML ответ
-        tree = ET.ElementTree(ET.fromstring(response.content))
-        root = tree.getroot()
+        data = response.json()
+        logging.info(f"Response from API: {data}")
+        rates = data.get("quotes")
+        if not rates:
+            raise HTTPException(status_code=500, detail="Rates not found in the response")
+        return rates
 
-        # Находим все курсы валют
-        namespaces = {'gesmes': 'http://www.gesmes.org/xml/2002-08-01',
-                      'eurofxref': 'http://www.ecb.int/vocabulary/2002-08-01/eurofxref'}
-        cube = root.find('.//eurofxref:Cube[@time]', namespaces)
-        rates = {}
+async def get_exchange_rate(currency: str, rates: dict) -> float:
+    if currency.upper() == "EUR":
+        return 1.0
 
-        for currency_cube in cube.findall('eurofxref:Cube', namespaces):
-            currency_code = currency_cube.get('currency')
-            rate = float(currency_cube.get('rate'))
-            rates[currency_code] = rate
+    if currency.upper() == "USDT":
+        usd_rate = rates.get("EURUSD")
+        if usd_rate:
+            return 1 / usd_rate  # USD to EUR
+        else:
+            raise HTTPException(status_code=500, detail="USD rate not found in exchange rates")
 
-            # Добавляем курс евро для удобства (по сути 1 EUR = 1 EUR)
-        rates["EUR"] = 1.0
+    rate_currency = rates.get(f"EUR{currency.upper()}")
+    if not rate_currency:
+        raise HTTPException(status_code=404, detail=f"Currency rate for {currency} not found")
 
-        rates = response.json().get("rates")
-
-
-        # Получаем курс евро (EUR)
-        rate_eur = rates.get("EUR")
-        if not rate_eur:
-            raise HTTPException(status_code=500, detail="EUR rate not found in exchange rates")
-
-        # Проверка для USDT
-        if currency == "USDT":
-            # Для USDT используем курс USD
-            rate_usd = rates.get("USD")
-            if not rate_usd:
-                raise HTTPException(status_code=500, detail="USD rate not found in exchange rates")
-
-            # Курс USDT относительно EUR такой же, как и курс USD к EUR
-            rate_relative_to_eur = rate_eur / rate_usd
-            logging.info(f"Курс для USDT (относительно EUR через USD): {rate_relative_to_eur}")
-            return rate_relative_to_eur
-
-        # Для остальных валют
-        rate_currency = rates.get(currency)
-        if not rate_currency:
-            raise HTTPException(status_code=404, detail=f"Currency rate for {currency} not found")
-
-        # Преобразуем курс валюты относительно евро
-        rate_relative_to_eur = rate_eur / rate_currency
-        logging.info(f"Курс валюты для {currency}: {rate_currency}")
-        return rate_relative_to_eur
+    rate_inverted = 1 / rate_currency
+    logging.info(f"Currency rate for {currency} (в EUR): {rate_inverted}")
+    return rate_inverted
 
 
 @app.post("/balance/")
 async def create_balance(request: Request):
     data = await request.json()
-    cat_id = data.get('cat_id')
-    value = data.get('value')
 
-    logging.info(f"Полученные данные: cat_id={cat_id}, value={value}, тип value={type(value)}")
+    if not isinstance(data, list):
+        raise HTTPException(status_code=400, detail="Data should be a list of balances")
+
+    logging.info("Fetching exchange rates once before processing categories...")
+    rates = await fetch_exchange_rates()
+    logging.info(f"Fetched rates: {rates}")
 
     async with pool.acquire() as connection:
-        category_query = "SELECT name, currency FROM Categories WHERE id = $1"
-        category = await connection.fetchrow(category_query, cat_id)
+        results = []
+        for item in data:
+            cat_id = item.get('cat_id')
+            value = item.get('value')
 
-        if not category:
-            raise HTTPException(status_code=404, detail="Category not found")
+            if cat_id is None or value is None:
+                raise HTTPException(status_code=400, detail="Each item must have cat_id and value")
 
-        category_name = category['name']
-        currency = category['currency']
+            logging.info(f"Data received: cat_id={cat_id}, value={value}")
 
-        rate = await get_exchange_rate(currency)
-        rate_as_integer = int(rate * 10000)
-        logging.info(f"Received cat_id={cat_id}, value={value}, rate={rate}, rate_as_integer={rate_as_integer}")
+            check_query = """
+                SELECT 1 FROM Balance 
+                WHERE cat_id = $1 AND date = CURRENT_DATE
+                """
+            existing_record = await connection.fetchval(check_query, cat_id)
+            if existing_record:
+                logging.warning(f"Balance for cat_id={cat_id} already exists for today")
+                continue
 
-        logging.info(f"Preparing to insert balance with cat_id: {cat_id}, value: {value}, rate: {rate}")
+            category_query = "SELECT name, currency FROM Categories WHERE id = $1"
+            category = await connection.fetchrow(category_query, cat_id)
 
-        try:
-            insert_query = """
-            INSERT INTO Balance (cat_id, value, date, rate)
-            VALUES ($1, $2, CURRENT_DATE, $3)
-            RETURNING id, cat_id, date, value, rate
-            """
-            balance = await connection.fetchrow(insert_query, cat_id, value, rate_as_integer)
-            logging.info(f"Calculating converted_value: value={balance['value']}, rate={balance['rate']} / 10000.0")
+            if not category:
+                raise HTTPException(status_code=404, detail="Category not found")
 
-            converted_value = balance["value"] * (balance["rate"] / 10000.0)
-            logging.info(f"Calculated converted_value: {converted_value}")
+            category_name = category['name']
+            currency = category['currency']
 
-            if not balance:
-                raise HTTPException(status_code=400, detail="Failed to insert balance")
+            rate = await get_exchange_rate(currency, rates)
+            rate_as_integer = int(rate * 10000)
+            logging.info(f"Received cat_id={cat_id}, value={value}, rate={rate}, rate_as_integer={rate_as_integer}")
 
+            try:
+                insert_query = """
+                INSERT INTO Balance (cat_id, value, date, rate)
+                VALUES ($1, $2, CURRENT_DATE, $3)
+                RETURNING id, cat_id, date, value, rate
+                """
+                balance = await connection.fetchrow(insert_query, cat_id, value, rate_as_integer)
+                logging.info(f"Calculating converted_value: value={balance['value']}, rate={balance['rate']} / 10000.0")
 
-            return {
+                converted_value = balance["value"] * (balance["rate"] / 10000.0)
+                logging.info(f"Calculated converted_value: {converted_value}")
+
+                results.append({
                     "id": balance["id"],
                     "cat_id": balance["cat_id"],
                     "category_name": category_name,
@@ -223,9 +216,36 @@ async def create_balance(request: Request):
                     "value": balance["value"],
                     "rate": balance["rate"] / 10000,
                     "converted_value": converted_value
-            }
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
+                })
+
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=str(e))
+    return results
+
+@app.put("/balance/")
+async def update_balance(request: Request):
+    data = await request.json()
+    cat_id = data.get("cat_id")
+    date = data.get("date")
+    value = data.get("value")
+
+    if value is None:
+        raise HTTPException(status_code=400, detail="Value is required")
+
+    async with pool.acquire() as connection:
+        query = """
+        UPDATE Balance
+        SET value = $1
+        WHERE cat_id = $2 AND date::date = $3::date
+        RETURNING id, cat_id, date, value
+        """
+        balance = await connection.fetchrow(query, value, cat_id, date)
+
+        if not balance:
+            raise HTTPException(status_code=404, detail="Balance not found")
+
+        return {"message": "Balance updated successfully", "balance": dict(balance)}
+
 
 logging.basicConfig(
     filename="app.log",

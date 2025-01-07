@@ -1,11 +1,11 @@
-import { fileURLToPath, URL } from 'node:url'
-import 'dotenv/config'
-const FRONTEND_PORT = process.env.FRONTEND_PORT || 7070;
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import { fileURLToPath, URL } from 'url';
+import dotenv from 'dotenv';
 
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+// Загружаем переменные окружения из файла .env
+dotenv.config();
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     vue(),
@@ -17,6 +17,11 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
-    port: FRONTEND_PORT,
-  }
-})
+    port: 7070,  // Используем переменную окружения
+    proxy: {
+        '/balances': { target: 'http://backend:8000', changeOrigin: true, secure: false },
+        '/add-balance': { target: 'http://backend:8000/balance', changeOrigin: true, secure: false, pathRewrite: { '^/add-balance': '/balance' }},
+        '/add-category': { target: 'http://backend:8000/categories', changeOrigin: true, secure: false },
+        },
+    },
+});

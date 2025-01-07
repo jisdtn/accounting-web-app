@@ -13,37 +13,53 @@
       <button type="submit" class="confirm">Показать балансы</button>
     </form>
 
-    <!-- Таблица с балансами (только если есть данные) -->
+    <!-- Таблица с балансами -->
     <table v-if="categories.length && dates.length && balances.length" class="balances-table">
       <thead>
         <tr>
           <th>Категория</th>
-          <th v-for="date in dates" :key="date">{{ formatDate(date) }}</th> <!-- Форматируем дату -->
+          <th v-for="date in dates" :key="date">{{ formatDate(date) }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="category in categories" :key="category.id">
           <td>{{ category.name }}</td>
           <td v-for="date in dates" :key="date">
-            {{ getBalance(category.id, date) || '—' }}
+            <span class="clickable-cell" @click="openEditModal(category.id, date)">
+                {{ getBalance(category.id, date) || '—' }}
+            </span>
           </td>
         </tr>
 
         <!-- Строка с Итого -->
         <tr class="total-row">
           <td><strong>Итого:</strong></td>
-          <td v-for="date in dates" :key="date">{{ calculateTotal(date) || '—' }}</td> <!-- Вызываем функцию расчета суммы -->
+          <td v-for="date in dates" :key="date">{{ calculateTotal(date) || '—' }}</td>
         </tr>
       </tbody>
     </table>
 
     <p v-if="!categories.length || !dates.length || !balances.length">Нет данных для отображения.</p>
+
+    <!-- Модальное окно -->
+    <EditBalanceModal
+      v-if="showModal"
+      :visible="showModal"
+      :cat-id="selectedCatId"
+      :date="selectedDate"
+      :initial-value="getBalance(selectedCatId, selectedDate)"
+      @close="closeModal"
+      @update-balance="handleBalanceUpdate"
+    />
   </div>
 </template>
+
 
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
+import EditBalanceModal from './Modal.vue';
+
 
 // Переменные для хранения данных
 const categories = ref([]);
@@ -51,6 +67,10 @@ const balances = ref([]);
 const dates = ref([]);
 const fromDate = ref('');
 const toDate = ref('');
+const showModal = ref(false);
+const selectedCatId = ref(null);
+const selectedDate = ref(null);
+
 
 // Функция для получения данных о балансах
 async function fetchBalances() {
@@ -104,9 +124,52 @@ function formatDate(date) {
 
 // Функция для расчета суммы (Итого) по дате
 function calculateTotal(date) {
-  return balances.value
+  const total = balances.value
     .filter(b => b.date.startsWith(date)) // Ищем балансы за указанную дату
     .reduce((total, b) => total + (b.converted_value || 0), 0); // Суммируем значения converted_value
+
+  return Math.floor(total); // Округляем вниз до целого числа
+}
+
+// Открытие модального окна с указанием catId и даты
+function openEditModal(catId, date) {
+  console.log("Opening modal for category:", catId, "date:", date);
+  selectedCatId.value = catId;
+  selectedDate.value = date;
+  showModal.value = true;
+}
+
+// Закрытие модального окна
+function closeModal() {
+  showModal.value = false;
+  selectedCatId.value = null;
+  selectedDate.value = null;
+}
+
+function handleBalanceUpdate(updatedBalance) {
+  const balanceToUpdate = balances.value.find(
+    (balance) => balance.cat_id === updatedBalance.cat_id && balance.date.startsWith(updatedBalance.date)
+  );
+  if (balanceToUpdate) {
+    balanceToUpdate.value = updatedBalance.value;
+  }
+  fetchBalances(); // Перезагружаем данные, чтобы отобразить актуальную информацию
+}
+
+
+// Сохранение отредактированного баланса
+async function saveEditedBalance(newValue) {
+  try {
+    await axios.put('http://localhost:8000/balance', {
+      cat_id: selectedCatId.value,
+      date: selectedDate.value,
+      value: newValue,
+    });
+    closeModal();
+    fetchBalances();
+  } catch (error) {
+    console.error('Ошибка при сохранении баланса:', error);
+  }
 }
 
 // Загружаем данные при монтировании компонента
@@ -165,6 +228,7 @@ input {
 
 .balances-table td {
   background-color: #fff;
+
 }
 
 /* Стиль для строки с Итого */
@@ -177,5 +241,10 @@ input {
 .balances-table th:not(:first-child),
 .balances-table td:not(:first-child) {
   min-width: 100px; /* Минимальная ширина для столбцов с датами */
+}
+.clickable-cell {
+  cursor: pointer;
+  text-decoration: underline;
+  color: blue;
 }
 </style>

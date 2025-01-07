@@ -19,11 +19,9 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 7070,  // Используем переменную окружения
     proxy: {
-      '/balances': {
-        target: 'http://backend:8000',  // Используем имя сервиса из docker-compose
-        changeOrigin: true,
-        secure: false,
-      },
+        '/balances': { target: 'http://backend:8000', changeOrigin: true, secure: false },
+        '/add-balance': { target: 'http://backend:8000/balance', changeOrigin: true, secure: false, pathRewrite: { '^/add-balance': '/balance' }},
+        '/add-category': { target: 'http://backend:8000/categories', changeOrigin: true, secure: false },
+        },
     },
-  },
 });

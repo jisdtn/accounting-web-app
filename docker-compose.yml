@@ -35,3 +35,10 @@ services:
     ports:
       - 7070:7070
     restart: on-failure
+
+  bot:
+    build: ./bot
+    env_file: .env
+    ports:
+        - 8080:8080
+    restart: on-failure

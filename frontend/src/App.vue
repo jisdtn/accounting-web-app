@@ -21,6 +21,21 @@ import { ref, onMounted, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import axios from 'axios';
 
+// Инициализируем Telegram Web Apps API
+onMounted(() => {
+  const script = document.createElement('script');
+  script.src = "https://telegram.org/js/telegram-web-app.js";
+  script.onload = () => {
+    console.log('Telegram Web App API загружен');
+    Telegram.WebApp.ready();
+
+    const user = Telegram.WebApp.initDataUnsafe.user;
+    console.log('Информация о пользователе:', user);
+  };
+  document.head.appendChild(script);
+});
+
+
 // Получаем текущий маршрут
 const route = useRoute();
 const headerClass = ref('header-default');

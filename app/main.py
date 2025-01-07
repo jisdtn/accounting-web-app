@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -222,29 +222,42 @@ async def create_balance(request: Request):
                 raise HTTPException(status_code=400, detail=str(e))
     return results
 
+
 @app.put("/balance/")
 async def update_balance(request: Request):
     data = await request.json()
+
+    # Извлекаем данные
     cat_id = data.get("cat_id")
     date = data.get("date")
     value = data.get("value")
 
-    if value is None:
-        raise HTTPException(status_code=400, detail="Value is required")
+    # Проверка обязательных полей
+    if cat_id is None or value is None or date is None:
+        raise HTTPException(status_code=400, detail="Each item must have cat_id, date, and value")
+
+    # Преобразуем дату в формат без часового пояса
+    try:
+        date_obj = datetime.fromisoformat(date).date()  # Преобразуем в дату для базы данных
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format with timezone.")
 
     async with pool.acquire() as connection:
         query = """
         UPDATE Balance
         SET value = $1
-        WHERE cat_id = $2 AND date::date = $3::date
+        WHERE cat_id = $2 AND date = $3
         RETURNING id, cat_id, date, value
         """
-        balance = await connection.fetchrow(query, value, cat_id, date)
+        balance = await connection.fetchrow(query, value, cat_id, date_obj)
 
         if not balance:
             raise HTTPException(status_code=404, detail="Balance not found")
 
-        return {"message": "Balance updated successfully", "balance": dict(balance)}
+        return {
+            "message": "Balance updated successfully",
+            "balance": dict(balance)
+        }
 
 
 logging.basicConfig(

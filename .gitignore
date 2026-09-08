@@ -160,3 +160,6 @@ cython_debug/
 .idea/
 .vscode/
 schema.sql
+
+# Raw demo recording — only docs/demo.gif (generated from it) is committed
+demo.mov

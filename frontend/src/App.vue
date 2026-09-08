@@ -1,50 +1,51 @@
 <template>
   <div id="app">
-    <!-- Хедер с изменяемым фоном -->
+    <!-- Header with a color that changes based on state -->
     <header :class="headerClass">
+      <button v-if="route.path !== '/'" class="back-button" @click="router.push('/')">
+        ← На главную
+      </button>
       <h1>Мои финансы</h1>
     </header>
 
-    <!-- Основной контент приложения -->
+    <!-- Main app content -->
     <main>
-      <router-view /> <!-- Здесь будут отображаться компоненты в зависимости от маршрута -->
+      <router-view /> <!-- Route components render here -->
     </main>
 
     <footer>
-      <p>© 2024 Моё приложение</p>
+      <p>© {{ currentYear }} Моё приложение</p>
     </footer>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 
-// Инициализируем Telegram Web Apps API
-onMounted(() => {
-  const script = document.createElement('script');
-  script.src = "https://telegram.org/js/telegram-web-app.js";
-  script.onload = () => {
-    console.log('Telegram Web App API загружен');
-    Telegram.WebApp.ready();
+const currentYear = new Date().getFullYear();
+const router = useRouter();
 
-    const user = Telegram.WebApp.initDataUnsafe.user;
-    console.log('Информация о пользователе:', user);
-  };
-  document.head.appendChild(script);
+// The Telegram Web Apps script is loaded statically in index.html (before this
+// module runs), so window.Telegram is already available here.
+onMounted(() => {
+  if (window.Telegram?.WebApp) {
+    window.Telegram.WebApp.ready();
+    console.log('Telegram user info:', window.Telegram.WebApp.initDataUnsafe.user);
+  }
 });
 
 
-// Получаем текущий маршрут
+// Track the current route
 const route = useRoute();
 const headerClass = ref('header-default');
 
-// Наблюдаем за изменением маршрута
+// Watch for route changes
 watch(
   () => route.path,
   (newPath) => {
-    // Если маршрут — это главная страница, проверяем балансы и меняем класс заголовка
+    // On the home page, check balances and update the header color
     if (newPath === '/') {
       checkBalancesAndUpdateHeader();
     } else {
@@ -53,82 +54,104 @@ watch(
   }
 );
 
-// Функция для проверки балансов и изменения цвета заголовка
+// Check balances and update the header color
 async function checkBalancesAndUpdateHeader() {
   try {
-    const today = new Date().toISOString().split('T')[0]; // текущая дата
-    const response = await axios.get('http://localhost:8000/balances', {
+    const today = new Date().toISOString().split('T')[0]; // today's date
+    const response = await axios.get('/balances/', {
       params: { from_date: today, to_date: today },
     });
 
     const balances = response.data;
 
-    // Если есть балансы за текущую дату, меняем цвет заголовка на зелёный, иначе красный
+    // Green header if there are balances for today, red otherwise
     headerClass.value = balances.length > 0 ? 'header-green' : 'header-red';
   } catch (error) {
     console.error('Ошибка при проверке балансов:', error);
   }
 }
 
-// Когда приложение загружается, проверяем балансы сразу
+// Check balances right away on app load
 onMounted(() => {
   checkBalancesAndUpdateHeader();
 });
 </script>
 
 <style>
-/* Подключаем шрифт Roboto из Google Fonts */
+/* Load the Roboto font from Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
-/* Применяем глобальные стили */
+/* Global styles */
 body, html {
-  font-family: 'Roboto', sans-serif; /* Современный шрифт */
-  background-color: #f5f5f5; /* Мягкий фон */
+  font-family: 'Roboto', sans-serif; /* Modern font */
+  background-color: #f5f5f5; /* Soft background */
   margin: 0;
   padding: 0;
   color: #333;
   line-height: 1.6;
-  height: 100%; /* Обеспечиваем, что body и html занимают всю высоту */
+  height: 100%; /* Make body and html fill the full height */
 }
 
 #app {
   display: flex;
   flex-direction: column;
-  min-height: 100vh; /* Обеспечиваем, что #app занимает всю высоту экрана */
+  min-height: 100vh; /* Make #app fill the full viewport height */
 }
 
 header {
-  padding: 20px;
+  padding: 16px 20px;
   color: white;
   border-radius: 8px;
-  text-align: center; /* Добавляем выравнивание текста по центру */
+  display: grid;
+  grid-template-columns: auto 1fr; /* button column collapses to 0 when absent */
+  align-items: center;
+  gap: 8px;
+}
+
+.back-button {
+  justify-self: start;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 h1 {
-  margin: 0; /* Убираем отступы сверху и снизу, если они есть */
+  grid-column: 2;
+  margin: 0; /* Remove top/bottom margin */
+  text-align: center;
+  font-size: 1.3rem;
 }
-/* Стандартный фон для всех страниц */
+/* Default background for all pages */
 .header-default {
   background-color: #1f91dc;
 }
 
-/* Красный фон для главной страницы, если балансы не внесены */
+/* Red background on the home page when balances are missing */
 .header-red {
   background-color: #fe0000;
 }
 
-/* Зелёный фон для главной страницы, если балансы внесены */
+/* Green background on the home page when balances are entered */
 .header-green {
   background-color: #1bc727;
 }
 
-/* Main занимает все доступное пространство */
+/* Main takes up all available space */
 main {
-  flex: 1; /* Заставляем main занимать всё доступное пространство */
+  flex: 1; /* Let main fill all available space */
   padding: 20px;
 }
 
-/* Футер всегда внизу */
+/* Footer always stays at the bottom */
 footer {
   background-color: #333;
   color: white;
@@ -137,23 +160,23 @@ footer {
   text-align: center;
 }
 
-/* Стили для кнопок */
+/* Button styles */
 button {
   padding: 10px 20px;
   border: none;
-  border-radius: 8px; /* Закругленные углы */
+  border-radius: 8px; /* Rounded corners */
   cursor: pointer;
   font-size: 16px;
-  transition: background-color 0.3s ease; /* Плавный переход при изменении цвета */
+  transition: background-color 0.3s ease; /* Smooth color transition */
 }
 
-/* Синяя кнопка для подтверждения операций */
+/* Blue button for confirming actions */
 button.confirm {
   background-color: #1F91DC;
   color: white;
 }
 
-/* Изменение цвета при наведении */
+/* Color change on hover */
 button.confirm:hover {
   background-color: #006bb7;
 }

@@ -2,7 +2,7 @@
   <div class="balances-container">
     <h2>Balance chart</h2>
 
-    <!-- Форма для ввода диапазона дат -->
+    <!-- Date range form -->
     <form @submit.prevent="fetchBalances">
       <label for="from-date">От даты:</label>
       <input v-model="fromDate" type="date" id="from-date" />
@@ -13,7 +13,7 @@
       <button type="submit" class="confirm">Показать балансы</button>
     </form>
 
-    <!-- Таблица с балансами -->
+    <!-- Balances table -->
     <table v-if="categories.length && dates.length && balances.length" class="balances-table">
       <thead>
         <tr>
@@ -31,7 +31,7 @@
           </td>
         </tr>
 
-        <!-- Строка с Итого -->
+        <!-- Total row -->
         <tr class="total-row">
           <td><strong>Итого:</strong></td>
           <td v-for="date in dates" :key="date">{{ calculateTotal(date) || '—' }}</td>
@@ -41,13 +41,14 @@
 
     <p v-if="!categories.length || !dates.length || !balances.length">Нет данных для отображения.</p>
 
-    <!-- Модальное окно -->
+    <!-- Edit modal -->
     <EditBalanceModal
       v-if="showModal"
       :visible="showModal"
       :cat-id="selectedCatId"
       :date="selectedDate"
       :initial-value="getBalance(selectedCatId, selectedDate)"
+      :balance-id="getBalanceId(selectedCatId, selectedDate)"
       @close="closeModal"
       @update-balance="handleBalanceUpdate"
     />
@@ -61,7 +62,7 @@ import axios from 'axios';
 import EditBalanceModal from './Modal.vue';
 
 
-// Переменные для хранения данных
+// State
 const categories = ref([]);
 const balances = ref([]);
 const dates = ref([]);
@@ -72,10 +73,10 @@ const selectedCatId = ref(null);
 const selectedDate = ref(null);
 
 
-// Функция для получения данных о балансах
+// Fetch balance data
 async function fetchBalances() {
   try {
-    // Если не задан диапазон дат, выводим последние 3 дня
+    // Default to the last 3 days if no range is set
     const today = new Date().toISOString().split('T')[0];
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
@@ -83,23 +84,23 @@ async function fetchBalances() {
     fromDate.value = fromDate.value || threeDaysAgo.toISOString().split('T')[0];
     toDate.value = toDate.value || today;
 
-    // Получаем балансы за указанный диапазон дат
-    const response = await axios.get('http://localhost:8000/balances', {
+    // Fetch balances for the selected date range
+    const response = await axios.get('/balances/', {
       params: { from_date: fromDate.value, to_date: toDate.value }
     });
 
-    // Проверяем, что данные приходят корректно
+    // Make sure the data looks right
     if (response.data.length) {
       balances.value = response.data;
 
-      // Создаем массив уникальных дат из балансов
+      // Build the list of unique dates from the balances
       dates.value = Array.from(new Set(response.data.map(item => item.date)));
     } else {
       console.error('Некорректные данные о балансах:', response.data);
     }
 
-    // Получаем категории
-    const categoriesResponse = await axios.get('http://localhost:8000/categories');
+    // Fetch categories
+    const categoriesResponse = await axios.get('/categories/');
     if (categoriesResponse.data) {
       categories.value = categoriesResponse.data;
     } else {
@@ -110,28 +111,34 @@ async function fetchBalances() {
   }
 }
 
-// Функция для получения converted_value по категории и дате
+// Get converted_value for a category/date pair
 function getBalance(categoryId, date) {
   const balance = balances.value.find(b => b.cat_id === categoryId && b.date.startsWith(date));
-  return balance ? balance.converted_value : null; // Возвращаем converted_value вместо value
+  return balance ? balance.converted_value : null; // Show converted_value, not the raw value
 }
 
-// Функция для форматирования даты в формате DD.MM.YYYY
+// Get the balance row id for a category/date pair (needed to delete it)
+function getBalanceId(categoryId, date) {
+  const balance = balances.value.find(b => b.cat_id === categoryId && b.date.startsWith(date));
+  return balance ? balance.id : null;
+}
+
+// Format a date as DD.MM.YYYY
 function formatDate(date) {
   const parsedDate = new Date(date);
-  return parsedDate.toLocaleDateString('ru-RU'); // Форматируем дату
+  return parsedDate.toLocaleDateString('ru-RU');
 }
 
-// Функция для расчета суммы (Итого) по дате
+// Calculate the total for a given date
 function calculateTotal(date) {
   const total = balances.value
-    .filter(b => b.date.startsWith(date)) // Ищем балансы за указанную дату
-    .reduce((total, b) => total + (b.converted_value || 0), 0); // Суммируем значения converted_value
+    .filter(b => b.date.startsWith(date)) // Balances for this date
+    .reduce((total, b) => total + (b.converted_value || 0), 0); // Sum converted_value
 
-  return Math.floor(total); // Округляем вниз до целого числа
+  return Math.floor(total); // Round down to a whole number
 }
 
-// Открытие модального окна с указанием catId и даты
+// Open the edit modal for a category/date pair
 function openEditModal(catId, date) {
   console.log("Opening modal for category:", catId, "date:", date);
   selectedCatId.value = catId;
@@ -139,7 +146,7 @@ function openEditModal(catId, date) {
   showModal.value = true;
 }
 
-// Закрытие модального окна
+// Close the edit modal
 function closeModal() {
   showModal.value = false;
   selectedCatId.value = null;
@@ -153,14 +160,14 @@ function handleBalanceUpdate(updatedBalance) {
   if (balanceToUpdate) {
     balanceToUpdate.value = updatedBalance.value;
   }
-  fetchBalances(); // Перезагружаем данные, чтобы отобразить актуальную информацию
+  fetchBalances(); // Reload to reflect the latest data
 }
 
 
-// Сохранение отредактированного баланса
+// Save the edited balance
 async function saveEditedBalance(newValue) {
   try {
-    await axios.put('http://localhost:8000/balance', {
+    await axios.put('/balance/', {
       cat_id: selectedCatId.value,
       date: selectedDate.value,
       value: newValue,
@@ -172,7 +179,7 @@ async function saveEditedBalance(newValue) {
   }
 }
 
-// Загружаем данные при монтировании компонента
+// Load data on mount
 onMounted(() => {
   fetchBalances();
 });
@@ -207,18 +214,18 @@ input {
   background-color: #0056b3;
 }
 
-/* Таблица с балансами */
+/* Balances table */
 .balances-table {
-  width: 100%; /* Таблица будет занимать всю ширину */
+  width: 100%; /* Take up the full width */
   border-collapse: collapse;
   margin-top: 20px;
 }
 
 .balances-table th, .balances-table td {
   border: 1px solid #ccc;
-  padding: 15px; /* Увеличим padding для более читабельного отображения */
-  text-align: center; /* Выравниваем текст по центру */
-  vertical-align: middle; /* Выравнивание по вертикали */
+  padding: 15px; /* Extra padding for readability */
+  text-align: center; /* Center the text */
+  vertical-align: middle;
 }
 
 .balances-table th {
@@ -231,16 +238,16 @@ input {
 
 }
 
-/* Стиль для строки с Итого */
+/* Total row style */
 .total-row td {
   font-weight: bold;
-  border-top: 2px solid #000; /* Жирная линия сверху строки Итого */
+  border-top: 2px solid #000; /* Bold line above the total row */
 }
 
-/* Ограничим ширину колонок с датами */
+/* Cap the width of the date columns */
 .balances-table th:not(:first-child),
 .balances-table td:not(:first-child) {
-  min-width: 100px; /* Минимальная ширина для столбцов с датами */
+  min-width: 100px; /* Minimum width for date columns */
 }
 .clickable-cell {
   cursor: pointer;

@@ -7,8 +7,7 @@
 <script>
 export default {
   mounted() {
-    const tg = window.Telegram.WebApp;
-    tg.expand(); // Разворачивает WebApp на весь экран
+    window.Telegram?.WebApp?.expand(); // Expand the WebApp to full screen
   },
 };
 </script>

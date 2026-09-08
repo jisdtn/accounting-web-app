@@ -3,15 +3,15 @@
   <div class="home-container">
     <h2>Выбери действие</h2>
 
-      <!-- Кнопки на главной странице -->
+      <!-- Home page buttons -->
         <div class="buttons">
-      <!-- Активная кнопка для перехода на экран с балансами -->
+      <!-- Go to the balances screen -->
       <button class="confirm" @click="$router.push('/balances')">Текущие накопления</button>
 
-      <!-- Активная кнопка для перехода на страницу добавления баланса -->
+      <!-- Go to the add-balance page -->
       <button @click="$router.push('/add-balance')" class="confirm">Добавить баланс</button>
 
-      <!-- Активная кнопка для перехода на страницу добавления категории -->
+      <!-- Go to the add-category page -->
       <button @click="$router.push('/add-category')" class="confirm">Добавить категорию</button>
 
     </div>
@@ -22,17 +22,17 @@
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
 
-// Логика для изменения фона заголовка через App.vue
+// Header background is controlled through App.vue's headerClass
 const headerClass = ref('header-red');
 
 onMounted(async () => {
   try {
-    const today = new Date().toISOString().split('T')[0]; // Текущая дата в формате YYYY-MM-DD
-    const response = await axios.get('http://localhost:8000/balances', {
+    const today = new Date().toISOString().split('T')[0]; // Today's date as YYYY-MM-DD
+    const response = await axios.get('/balances/', {
       params: { from_date: today, to_date: today }
     });
 
-    // Если есть балансы за текущую дату, меняем цвет фона заголовка на зелёный
+    // Turn the header green if there are balances for today
     if (response.data.length > 0) {
       headerClass.value = 'header-green';
     }
@@ -43,17 +43,17 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Весь контейнер страницы */
+/* Full-page container */
 .home-container {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  justify-content: center; /* Центрирование содержимого по вертикали */
+  justify-content: center; /* Center content vertically */
   align-items: center;
   padding: 20px;
 }
 
-/* Кнопки на странице */
+/* Page buttons */
 .buttons {
   display: flex;
   flex-direction: column;
@@ -64,7 +64,7 @@ onMounted(async () => {
 button {
   padding: 10px 20px;
   font-size: 16px;
-  border-radius: 8px; /* Закругленные углы */
+  border-radius: 8px; /* Rounded corners */
 }
 
 button.inactive {
@@ -73,7 +73,7 @@ button.inactive {
 }
 
 button.confirm {
-  background-color: #1F91DC; /* Синий цвет */
+  background-color: #1F91DC; /* Blue */
   color: white;
   border: none;
   cursor: pointer;
@@ -81,6 +81,6 @@ button.confirm {
 }
 
 button.confirm:hover {
-  background-color: #006bb7; /* Темнее при наведении */
+  background-color: #006bb7; /* Darker on hover */
 }
 </style>

@@ -7,7 +7,7 @@ import WebApp from '../views/WebApp.vue';
 
 const routes = [
   { path: '/', name: 'Home', component: Home },
-  { path: '/balances', name: 'Balances', component: Balances }, // табличка с балансами и датами
+  { path: '/balances', name: 'Balances', component: Balances }, // table of balances by date
   { path: '/add-balance', name: 'AddBalance', component: AddBalance },
   { path: '/add-category', name: 'AddCategory', component: AddCategory },
   { path: "/webapp", name: "WebApp", component: WebApp },
@@ -20,5 +20,5 @@ const router = createRouter({
   routes,
 });
 
-export default router;  // Экспортируем router по умолчанию
+export default router;
 

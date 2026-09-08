@@ -3,18 +3,21 @@
     <div class="modal-content" @click.stop>
       <h3>Редактировать баланс</h3>
       <input v-model="localValue" type="number" />
-      <button @click="saveBalance" class="save-button">Сохранить</button>
-      <button @click="emit('close')" class="cancel-button">Отмена</button>
+      <div class="button-container">
+        <button @click="saveBalance" class="save-button">Сохранить</button>
+        <button v-if="props.balanceId" @click="deleteBalance" class="delete-button">Удалить</button>
+        <button @click="emit('close')" class="cancel-button">Отмена</button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, defineEmits, defineProps } from 'vue';
+import { ref, watch } from 'vue';
 import axios from 'axios';
 
 const emit = defineEmits(['close']);
-const props = defineProps(['catId', 'date', 'visible', 'initialValue']);
+const props = defineProps(['catId', 'date', 'visible', 'initialValue', 'balanceId']);
 const localValue = ref(props.initialValue);
 
 watch(() => props.initialValue, (newVal) => {
@@ -28,16 +31,29 @@ async function saveBalance() {
       date: props.date,
       value: localValue.value,
     });
-    await axios.put('http://localhost:8000/balance/', {
+    await axios.put('/balance/', {
       cat_id: props.catId,
       date: props.date,
       value: localValue.value,
     });
     alert('Баланс успешно обновлен');
-    emit('close'); // Закрываем модальное окно
-    emit('update-balance', { catId: props.catId, date: props.date, value: localValue.value }); // Передаем обновленные данные
+    emit('close'); // Close the modal
+    emit('update-balance', { catId: props.catId, date: props.date, value: localValue.value }); // Pass the updated data
   } catch (error) {
     console.error('Ошибка при обновлении баланса:', error);
+  }
+}
+
+async function deleteBalance() {
+  if (!confirm('Удалить эту запись баланса?')) {
+    return;
+  }
+  try {
+    await axios.delete(`/balance/${props.balanceId}`);
+    emit('close');
+    emit('update-balance', { catId: props.catId, date: props.date, value: null });
+  } catch (error) {
+    console.error('Ошибка при удалении баланса:', error);
   }
 }
 </script>
@@ -79,26 +95,35 @@ async function saveBalance() {
 }
 
 .save-button,
+.delete-button,
 .cancel-button {
-  flex: 1; /* Делает кнопки равной ширины */
+  flex: 1; /* Equal-width buttons */
   color: white;
   border: none;
   border-radius: 5px;
   padding: 10px 0;
   cursor: pointer;
-  margin: 0 5px; /* Добавляет небольшой промежуток между кнопками */
+  margin: 0 5px; /* Small gap between the buttons */
 }
 
 .save-button {
-  background-color: #28a745; /* Зеленый */
+  background-color: #28a745; /* Green */
 }
 
 .save-button:hover {
   background-color: #218838;
 }
 
+.delete-button {
+  background-color: #dc3545; /* Red */
+}
+
+.delete-button:hover {
+  background-color: #c82333;
+}
+
 .cancel-button {
-  background-color: #007bff; /* Синий */
+  background-color: #007bff; /* Blue */
 }
 
 .cancel-button:hover {

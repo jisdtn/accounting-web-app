@@ -13,11 +13,11 @@
         <input v-model="currency" type="text" placeholder="Введите валюту (например, USD)" required />
       </div>
 
-      <!-- Кнопка подтверждения -->
+      <!-- Confirm button -->
       <button type="submit" class="confirm">Добавить категорию</button>
     </form>
 
-    <!-- Сообщение об успехе или ошибке -->
+    <!-- Success or error message -->
     <p v-if="message">{{ message }}</p>
   </div>
 </template>
@@ -25,31 +25,31 @@
 <script setup>
 import { ref } from 'vue';
 import axios from 'axios';
-import { useRouter } from 'vue-router'; // Подключаем роутер для перенаправления
+import { useRouter } from 'vue-router'; // Used to redirect after submit
 
-// Поля для ввода данных
+// Input fields
 const name = ref('');
 const currency = ref('');
 const message = ref('');
-const router = useRouter(); // Инициализируем роутер
+const router = useRouter();
 
-// Функция для добавления новой категории
+// Create a new category
 async function addCategory() {
   try {
-    const response = await axios.post('http://localhost:8000/categories/', {
+    const response = await axios.post('/categories/', {
       name: name.value,
       currency: currency.value
     });
 
     message.value = `Категория "${response.data.name}" успешно добавлена!`;
-    // Очищаем поля после успешного добавления
+    // Reset the fields after a successful submit
     name.value = '';
     currency.value = '';
 
-    // Через 2 секунды перенаправляем на главную страницу
+    // Redirect to the home page after 2 seconds
     setTimeout(() => {
       router.push('/');
-    }, 2000); // Задержка 2 секунды
+    }, 2000);
   } catch (error) {
     console.error('Ошибка при добавлении категории:', error.response ? error.response.data : error.message);
     message.value = 'Ошибка при добавлении категории. Попробуйте снова.';
@@ -58,7 +58,7 @@ async function addCategory() {
 </script>
 
 <style scoped>
-/* Центрирование формы */
+/* Center the form */
 .form-container {
   display: flex;
   flex-direction: column;
@@ -67,7 +67,7 @@ async function addCategory() {
   min-height: 100vh;
 }
 
-/* Стили формы */
+/* Form styles */
 .category-form {
   width: 100%;
   max-width: 600px;
@@ -88,7 +88,7 @@ input {
   border-radius: 4px;
 }
 
-/* Синяя и закруглённая кнопка */
+/* Blue rounded button */
 button.confirm {
   width: 100%;
   padding: 10px;
@@ -101,7 +101,7 @@ button.confirm {
   margin-top: 20px;
 }
 
-/* Изменение фона кнопки при наведении */
+/* Button background change on hover */
 button.confirm:hover {
   background-color: #0056b3;
 }

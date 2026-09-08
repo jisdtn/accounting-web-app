@@ -3,16 +3,16 @@
     <h2>Добавление нового баланса</h2>
 
     <form @submit.prevent="addBalances" class="balance-form">
-      <!-- Перебираем категории и создаем поля для каждой категории -->
+      <!-- Render an input for each category -->
       <div v-for="category in categories" :key="category.id" class="form-item">
         <label>{{ category.name }} ({{ category.currency }}):</label>
 
-        <!-- Поле для ввода суммы -->
+        <!-- Value input -->
         <div class="input-group">
           <label for="value">Введите сумму:</label>
-          <input v-model="balances[category.id].value" type="number" placeholder="Сумма" required />
+          <input v-model="balances[category.id].value" type="number" placeholder="Сумма" />
 
-          <!-- Подсказка с предыдущим балансом -->
+          <!-- Hint showing the previous balance -->
           <span
             v-if="previousBalances[category.id]"
             class="previous-balance"
@@ -24,11 +24,11 @@
         </div>
       </div>
 
-      <!-- Синяя кнопка подтверждения операции -->
+      <!-- Blue confirm button -->
       <button type="submit" class="confirm">Добавить балансы</button>
     </form>
 
-    <!-- Сообщение об успехе или ошибке -->
+    <!-- Success or error message -->
     <p v-if="message">{{ message }}</p>
   </div>
 </template>
@@ -39,41 +39,41 @@ import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
 
-// Храним категории, текущие балансы и предыдущие балансы
+// Categories, current balances, and previous balances
 const categories = ref([]);
 const balances = ref({});
-const previousBalances = ref({}); // Для хранения предыдущих балансов
+const previousBalances = ref({}); // Holds the previous-day balances
 const message = ref('');
-const router = useRouter(); // Инициализируем роутер
+const router = useRouter();
 
-// Функция для получения списка категорий с бэкенда
+// Fetch the category list from the backend
 async function fetchCategories() {
   try {
-    const response = await axios.get('http://localhost:8000/categories');
+    const response = await axios.get('/categories/');
     categories.value = response.data;
 
-    // Инициализация пустых значений для каждой категории
+    // Initialize empty values for each category
     categories.value.forEach(category => {
       balances.value[category.id] = { value: null };
-      previousBalances.value[category.id] = null; // Инициализация предыдущих балансов
+      previousBalances.value[category.id] = null;
     });
   } catch (error) {
     console.error('Ошибка при получении категорий:', error.response ? error.response.data : error.message);
   }
 }
 
-// Функция для получения балансов за предыдущий день
+// Fetch balances from the previous day
 async function fetchPreviousBalances() {
   try {
     const previousDay = new Date();
     previousDay.setDate(previousDay.getDate() - 1);
     const formattedPreviousDay = previousDay.toISOString().split('T')[0];
 
-    const response = await axios.get('http://localhost:8000/balances', {
+    const response = await axios.get('/balances/', {
       params: { from_date: formattedPreviousDay, to_date: formattedPreviousDay }
     });
 
-    // Сохраняем предыдущие балансы (используем поле value) для каждой категории
+    // Store the previous balance value for each category
     response.data.forEach(balance => {
       previousBalances.value[balance.cat_id] = balance.value || null;
     });
@@ -82,39 +82,55 @@ async function fetchPreviousBalances() {
   }
 }
 
-// Функция для подстановки предыдущего баланса
+// Fill in the previous balance for a category
 function setPreviousBalance(categoryId) {
   const previousBalance = previousBalances.value[categoryId];
   if (previousBalance) {
-    balances.value[categoryId].value = previousBalance; // Подставляем значение из value
+    balances.value[categoryId].value = previousBalance;
   }
 }
 
-// Вызов функции для получения категорий при монтировании компонента
+// Load categories and previous balances on mount
 onMounted(() => {
   fetchCategories();
-  fetchPreviousBalances(); // Загружаем предыдущие балансы
+  fetchPreviousBalances();
 });
 
-// Функция для отправки данных на бэкенд
+// Submit the entered balances to the backend
 async function addBalances() {
   try {
-    // Собираем все данные для отправки в одном массиве
+    // Collect all entries into a single array
     const balanceData = Object.entries(balances.value)
-      .filter(([_, { value }]) => value !== null) // Фильтруем только заполненные значения
+      .filter(([_, { value }]) => value !== null) // Only keep filled-in values
       .map(([cat_id, { value }]) => ({
         cat_id: parseInt(cat_id),
         value: parseInt(value)
       }));
-    // Отправляем один запрос с массивом данных
-    const response = await axios.post('http://localhost:8000/balance/', balanceData);
 
-    message.value = 'Success!';
+    if (!balanceData.length) {
+      message.value = 'Заполни сумму хотя бы для одной категории.';
+      return;
+    }
 
-    // После успешного добавления перенаправляем на главную страницу
+    // Creates new entries; categories that already have a record for today are skipped here
+    const response = await axios.post('/balance/', balanceData);
+    const createdCatIds = new Set(response.data.map(item => item.cat_id));
+
+    // For anything skipped (already recorded today), update it instead of silently dropping it
+    const alreadyRecorded = balanceData.filter(item => !createdCatIds.has(item.cat_id));
+    for (const item of alreadyRecorded) {
+      await axios.patch('/balance/', item);
+    }
+
+    const parts = [];
+    if (createdCatIds.size) parts.push(`добавлено: ${createdCatIds.size}`);
+    if (alreadyRecorded.length) parts.push(`обновлено (уже было записано сегодня): ${alreadyRecorded.length}`);
+    message.value = `Готово — ${parts.join(', ')}.`;
+
+    // Redirect to the home page after a successful submit
     setTimeout(() => {
       router.push('/');
-    }, 2000); // Ожидаем 2 секунды, чтобы показать сообщение, и затем перенаправляем
+    }, 2000); // Wait 2s so the message is visible before redirecting
   } catch (error) {
     console.error('An error occurred while adding balances:', error.response ? error.response.data : error.message);
     message.value = `An error occurred while adding balances: ${error.response ? error.response.data.detail : error.message}`;
@@ -124,7 +140,7 @@ async function addBalances() {
 </script>
 
 <style scoped>
-/* Центрирование формы */
+/* Center the form */
 .form-container {
   display: flex;
   flex-direction: column;
@@ -133,7 +149,7 @@ async function addBalances() {
   min-height: 100vh;
 }
 
-/* Стили формы */
+/* Form styles */
 .balance-form {
   width: 100%;
   max-width: 600px;
@@ -159,9 +175,9 @@ input {
   border-radius: 4px;
 }
 
-/* Подсказка с предыдущим балансом */
+/* Hint showing the previous balance */
 .previous-balance {
-  color: #aaa; /* Серый цвет */
+  color: #aaa; /* Gray */
   cursor: pointer;
   font-size: 0.9em;
   margin-left: 10px;
@@ -171,7 +187,7 @@ input {
   text-decoration: underline;
 }
 
-/* Синяя и закруглённая кнопка */
+/* Blue rounded button */
 button.confirm {
   width: 100%;
   padding: 10px;
@@ -184,7 +200,7 @@ button.confirm {
   margin-top: 20px;
 }
 
-/* Изменение фона кнопки при наведении */
+/* Button background change on hover */
 button.confirm:hover {
   background-color: #0056b3;
 }

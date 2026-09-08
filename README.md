@@ -40,6 +40,7 @@
 | Авторизация API | общий bearer-токен (`Authorization: Bearer <token>`) |
 | Курсы валют | [apilayer / exchangerate.host](https://apilayer.com/marketplace/exchangerates_data-api) |
 
+
 ## Запуск проекта
 
 __Перед запуском необходимо установить зависимости.
